@@ -304,7 +304,7 @@ var openPreviousPage = $axure.player.openPreviousPage = function () {
     function setExpandCollapseState(collapsedAll) {
         if (collapsedAll == _collapsedAll) return;
         _collapsedAll = collapsedAll;
-        $("#expandCollapseAll").text(_collapsedAll ? "展开全部" : "闭合全部");
+        $("#expandCollapseAll").text(_collapsedAll ? "Expand All" : "Collapse All");
     }
 
     function expandCollapseAll_click(e) {
@@ -562,11 +562,11 @@ var openPreviousPage = $axure.player.openPreviousPage = function () {
         treeUl += "</ul></div>";
 
         if (!MOBILE_DEVICE) {
-            treeUl += "<div id='changePageInstructions' class='pageSwapInstructions'>使用  ";
+            treeUl += "<div id='changePageInstructions' class='pageSwapInstructions'>Use  ";
             treeUl += '<span class="backKeys"></span>';
-            treeUl += "  和  ";
+            treeUl += "  and  ";
             treeUl += '<span class="forwardKeys"></span>';
-            treeUl += "  键<br>切换上下页";
+            treeUl += "  keys<br>to move between pages";
             treeUl += "</div>";
         }
 
