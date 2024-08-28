@@ -468,7 +468,7 @@
 
         pageNotesUi += "<div id='pageNotesScrollContainer'>";
         pageNotesUi += "<div id='pageNotesContainer'>";
-        pageNotesUi += "<div id='pageNotesEmptyState' class='emptyStateContainer'><div class='emptyStateTitle'>这个页面没有注释。</div><div class='emptyStateContent'>☃️</div><div class='dottedDivider'></div></div>";
+        pageNotesUi += "<div id='pageNotesEmptyState' class='emptyStateContainer'><div class='emptyStateTitle'>这个页面没有注释。</div><div class='emptyStateContent'><span style='font-size: 4em; line-height: 2em;'>☃️</span></div><div class='dottedDivider'></div></div>";
         pageNotesUi += "<span id='pageNotesContent'></span>";
         pageNotesUi += "</div></div>";
 
