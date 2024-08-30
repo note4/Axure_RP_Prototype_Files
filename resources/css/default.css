@@ -669,7 +669,8 @@ input[type=text]::-ms-clear {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 175px;
+    /* max-width: 175px; */
+    max-width: max-content;
     margin-right: 6px;
     font-weight: 600;
 }
