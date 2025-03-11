@@ -365,7 +365,7 @@
                     return Number(elementQuery.css('opacity')) * 100;
                 }
             } else {
-                widget.opacity = Number(elementQuery.css('opacity')) * 100;
+                widget.opacity = function() { return Number(elementQuery.css('opacity')) * 100; }
             }
             //widget.rotation = $ax.move.getRotationDegree(widget.elementId);
             var scriptId = $ax.repeater.getScriptIdFromElementId(elementId);

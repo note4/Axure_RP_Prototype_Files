@@ -400,6 +400,11 @@ var openPreviousPage = $axure.player.openPreviousPage = function () {
         }
     }
 
+    $(document).ready(function() {
+        // 调用函数以默认启用hotspots
+        showHotspots_click(null);
+    });
+
     function showHotspots_click(event) {
         var overflowMenuCheckbox = $('#showHotspotsOption').find('.overflowOptionCheckbox');
         var projOptionsCheckbox = $('#projectOptionsHotspotsCheckbox');
