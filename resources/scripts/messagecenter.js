@@ -268,7 +268,7 @@ var BROWSER_VERSION = 5000;
     // -----------------------------------------------------------------------------------------
     // -----------------------------------------------------------------------------------------
     _messageCenter.dispatchMessageRecursively = function(message, data) {
-        console.log("dispatched to " + window.location.toString());
+        //console.log("dispatched to " + window.location.toString());
 
         // dispatch to the top center first
         _messageCenter.dispatchMessage(message, data);

@@ -1782,7 +1782,8 @@ var toolBarOnly = true;
 
     $axure.player.getProjectName = function getProjectName() {
         if (typeof PREVIEW_INFO !== 'undefined') {
-            return PREVIEW_INFO.fileName;
+            // default decodeURI may decode some chars wrong in case when the string was not decoded in the same browser
+            return new URLSearchParams("a=" + PREVIEW_INFO.fileName).get("a");
         } else if(typeof $axure.player.settings.projectName !== 'undefined') {
             return $axure.player.settings.projectName;
         } else return false;
@@ -3098,7 +3099,7 @@ var toolBarOnly = true;
             }
 
             if (settings.id == 'feedbackHost')
-                $('#overflowMenuContainer').prepend('<div id="showCommentsOption" class="showOption" style="order: 2"><div class="overflowOptionCheckbox"></div>Show Comments</div>');
+                $('#overflowMenuContainer').prepend('<div id="showCommentsOption" class="showOption" style="order: 2"><div class="overflowOptionCheckbox"></div>Show comments</div>');
 
             if (!settings.id) throw ('each plugin host needs an id');
 

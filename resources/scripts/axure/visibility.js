@@ -161,8 +161,8 @@
 
         var isIdFitToContent = $ax.dynamicPanelManager.isIdFitToContent(parentId);
         //fade and resize won't work together when there is a container... but we still needs the container for fit to content DPs
-        var needContainer = options.easing && options.easing != 'none' && ((options.easing != 'fade' && options.easing != 'scale' && options.easing != 'fadeAndScale') ||  isIdFitToContent);
-        var cullPosition = options.cull ? options.cull.css('position') : '';
+        var needContainer = options.easing && options.easing != 'none' && (options.easing != 'fade' || isIdFitToContent);
+        var cullPosition = options.cull ? (isIdFitToContent ? 'relative' : 'absolute') : '';
         var containerExists = options.containerExists;
 
         var isFullWidth = $ax.dynamicPanelManager.isPercentWidthPanel($obj(childId));
@@ -335,16 +335,35 @@
             completeTotal = 1;
             onComplete();
         } else if (options.easing == 'scale' || options.easing == 'fadeAndScale') {
-            var withFade = options.easing == 'fadeAndScale';
-            var transformOrigin = visibleWrapped.css('transform-origin');
-            var transform = visibleWrapped.css('transform');
-            var opacity = visibleWrapped.css('opacity');
-            visibleWrapped.css('transform-origin', options.scaleAnchor);
+            var innerContainer = $('<div></div>');
+            innerContainer.attr('id', containerId + "_inner");
+            innerContainer.data('flip', options.direction == 'left' || options.direction == 'right' ? 'y' : 'x');
+            innerContainer.css({
+                position: 'relative',
+                'width': containerWidth,
+                'height': containerHeight,
+                'display': 'flex'
+            });
 
-            if (options.value) {
-                visibleWrapped.css('visibility', 'inherit');
-                visibleWrapped.css('display', 'flex');
+            innerContainer.appendTo(container);
+            wrapped.appendTo(innerContainer);
+            completeTotal = 1;
+
+            innerContainer.css('transform-origin', options.scaleAnchor);
+
+            if(options.value){
+                child.css({
+                    'display': '',
+                    'visibility': 'inherit'
+                });
+
+                visibleWrapped.css({
+                    'display': '',
+                    'visibility': 'inherit'
+                });
             }
+
+            var withFade = options.easing == 'fadeAndScale';
 
             $({ offset: 0 }).animate({ offset: 1 }, {
                 duration: options.duration,
@@ -354,20 +373,19 @@
                     var scale;
                     if (options.value) scale = now + options.scale - now * options.scale;
                     else scale = 1 - now + now * options.scale;
-                    visibleWrapped.css('transform', 'scale(' + scale + ')');
+                    innerContainer.css('transform', 'scale(' + scale + ')');
 
                     if (withFade) {
                         var opacity;
                         if (options.value) opacity = now;
                         else opacity = 1 - now;
-                        visibleWrapped.css('opacity', opacity);
+                        innerContainer.css('opacity', opacity);
                     }
                 },
                 complete: function () {
                     $ax.visibility.SetIdVisible(childId, options.value);
-                    visibleWrapped.css('transform', transform);
-                    visibleWrapped.css('opacity', opacity);
-                    visibleWrapped.css('transform-origin', transformOrigin);
+                    wrapped.insertBefore(innerContainer);
+                    innerContainer.remove();
                     onComplete();
                 },
             });
@@ -457,6 +475,8 @@
                         break;
                 }
 
+                var hasNoTrs = child.hasClass('notrs');
+
                 var onFlipShowComplete = function () {
                     // return the scroll position to the correct location after unexpected reset of the scroll to the top after multiple flip-animation compliting. RP-2192
                     var preventNextScroll = function () {
@@ -470,6 +490,7 @@
 
                     var trapScroll = _trapScrollLoc(parentId);
                     $ax.visibility.SetIdVisible(childId, true);
+                    if(hasNoTrs) child.addClass('notrs');
 
                     wrapped.insertBefore(innerContainer);
                     innerContainer.remove();
@@ -488,6 +509,7 @@
                     'display': '',
                     'visibility': 'inherit'
                 });
+                if(hasNoTrs) child.removeClass('notrs');
 
                 visibleWrapped.css({
                     'display': '',
@@ -495,6 +517,7 @@
                 });
 
                 innerContainer.css({
+                    'transition-property': 'transform',
                     '-webkit-transition-duration': options.duration + 'ms',
                     'transition-duration': options.duration + 'ms'
                 });
@@ -518,10 +541,13 @@
                         break;
                 }
 
+                var hasNoTrs = child.hasClass('notrs');
+
                 var onFlipHideComplete = function() {
                     var trapScroll = _trapScrollLoc(parentId);
                     wrapped.insertBefore(innerContainer);
                     $ax.visibility.SetIdVisible(childId, false);
+                    if(hasNoTrs) child.addClass('notrs');
 
                     innerContainer.remove();
                     trapScroll();
@@ -530,11 +556,14 @@
                 };
 
                 innerContainer.css({
+                    'transition-property': 'transform',
                     '-webkit-backface-visibility': 'hidden',
                     'backface-visibility': 'hidden',
                     '-webkit-transition-duration': options.duration + 'ms',
                     'transition-duration': options.duration + 'ms'
                 });
+
+                if(hasNoTrs) child.removeClass('notrs');
 
                 if(preserveScroll) _tryResumeScrollForDP(childId);
                 _setRotateTransformation(innerContainer, flipdegree, containerDiv, onFlipHideComplete, options.duration, true);
@@ -684,6 +713,23 @@
         //pin to browser
         if(isFixed) $ax.dynamicPanelManager.adjustFixed(id, oldState.width(), oldState.height(), state.width(), state.height());
 
+        function updateIframeUrl(iframe) {
+            var origSrc = iframe.attr('src');
+            if(origSrc && origSrc.toLowerCase().indexOf('http://') == -1) {
+                origSrc = origSrc.split("?")[0];
+                var newSrcUrl = $ax.globalVariableProvider.getLinkUrl(origSrc);
+                iframe.attr('src', newSrcUrl);
+            }
+        }
+
+        oldState.find('iframe').each(function () {
+            updateIframeUrl($(this));
+        });
+        state.find('iframe').each(function () {
+            updateIframeUrl($(this));
+        });
+ 
+
         _bringPanelStateToFront(id, stateId, oldStateId, animationInInfo.easingType == 'none' || animationInInfo.duration == '0');
 
         var fitToContent = $ax.dynamicPanelManager.isIdFitToContent(id);
@@ -787,8 +833,7 @@
             };
 
             if(!panel) {
-                var boundingRect = $ax('#' + id).offsetBoundingRect();
-                //var boundingRect = $axure.fn.getWidgetBoundingRect(id);
+                var boundingRect = $ax('#' + id).offsetBoundingRectToComponent();
                 css.top = boundingRect.top;
                 css.left = boundingRect.left;
             }
@@ -964,7 +1009,6 @@
         }
         container.remove();
         trapScroll();
-        $ax.style.resetLayerChildrenStates(id);
     };
 
     var _trapScrollLoc = function (id) {
@@ -996,7 +1040,7 @@
 
         if(!id) return id;
         var jobj = $(window.lastFocusedClickable);
-        return jobj.is('a') || jobj.is('input') ? id : '';
+        return jobj.is('a') || jobj.is('input') || jobj.is('textarea') ? id : '';
     }
 
     var _setCurrFocus = function(id) {
@@ -1243,7 +1287,7 @@
         // something is only visible if it's not hidden and limboed
         query.each(function(diagramObject, elementId) {
             // Rdos already handled, contained widgets are limboed by the parent, and sub menus should be ignored
-            if(diagramObject.isContained || $ax.public.fn.IsReferenceDiagramObject(diagramObject.type) || $ax.public.fn.IsTableCell(diagramObject.type) || $jobj(elementId).hasClass('sub_menu')) return;
+            if(diagramObject.isContained || $ax.public.fn.IsTableCell(diagramObject.type) || $jobj(elementId).hasClass('sub_menu')) return;
             if(diagramObject.type == 'table' && $jobj(elementId).parent().hasClass('ax_menu')) return;
             if(skipRepeater) {
                 // Any item in a repeater should return

@@ -653,13 +653,14 @@
             var elementIds = $ax.getElementIdsFromPath(action.objectsToStyleApply[i].objectPath, eventInfo);
             if (elementIds.length == 0) return;
 
-            var firstId = elementIds[0];
-            if (!$ax.style.isLastAppliedStyle(firstId, applyStyleInfo.className)) {
-                $ax.style.setApplyStyleTag(applyStyleInfo.className, applyStyleInfo.cssRule);
-            }
-
             for (var j = 0; j < elementIds.length; j++) {
                 var id = elementIds[j];
+
+                if (!$ax.style.isLastAppliedStyle(id, applyStyleInfo.className)) {
+                    var styleTagId = id + "_" + applyStyleInfo.className;
+                    $ax.style.setApplyStyleTag(styleTagId, applyStyleInfo.cssRule, applyStyleInfo.selectorIds, eventInfo, j);
+                }
+
                 if ($ax.public.fn.IsLayer($obj(id).type)) {
                     var childrenIds = $ax.public.fn.getLayerChildrenDeep(id, true);
                     for (var n = 0; n < childrenIds.length; n++) {

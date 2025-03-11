@@ -175,7 +175,7 @@
             window.shouldOutline = true;
         });
 
-        var _lastFocusedClickableSelector = 'input, a';
+        var _lastFocusedClickableSelector = 'input, a, textarea';
         $ax.event.attachFocusAndBlur($(_lastFocusedClickableSelector));
 
         $(window.document).bind('keyup', function (e) {

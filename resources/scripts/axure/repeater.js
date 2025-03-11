@@ -77,6 +77,9 @@ $axure.internal(function($ax) {
             return;
         }
 
+        //disabling pregen
+        itemsPregen = false;
+
         // Reset selected/disabled dictionaries upon reset, if necessary (reset must, persist can't, and preeval doesn't care because it hasn't been set up yet.
         if(refreshType == _refreshType.reset) $ax.style.clearStateForRepeater(repeaterId);
 
@@ -248,11 +251,17 @@ $axure.internal(function($ax) {
                     if (id.indexOf('_') <= 0 && id.indexOf('p') == -1) ids.push(elementId);
                     return prop + '="' + elementId + '"';
                 };
+                var processSvgUrlId = function (full, prop, id) {
+                    var elementId = _createElementId('u' + id, itemId);
+                    return `${prop}="url(#${elementId})"`;
+                };
 
                 var copy = (useAlt ? altDiv : div).clone();
                 useAlt = !useAlt;
                 copy.attr('id', itemElementId);
-                copy.html(div.html().replace(/(id|for)="?u([0-9]+(p([0-9]){3})?(_[_a-z0-9]*)?)"?/g, processId));
+                var rep = div.html().replace(/(id|for)="?u([0-9]+(p([0-9]){3})?(_[_a-z0-9]*)?)"?/g, processId);
+                rep = rep.replace(/(fill|stroke|mask) ?= ?"url\(\#u([0-9]+(p([0-9]){3})?(_[_a-z0-9]*)?)\)"/g, processSvgUrlId);
+                copy.html(rep);
                 if(obj.repeaterPropMap.isolateRadio) {
                     var radioButtons = copy.find(':radio');
                     for(var radioIndex = 0; radioIndex < radioButtons.length; radioIndex++) {
@@ -325,6 +334,9 @@ $axure.internal(function($ax) {
         var currentItemCount = _repeaterManager.getItemCount(repeaterId);
         var deleteLastItems = previousItemCount > 0 && currentItemCount === 0;
 
+        //do the objects in the repeater do not repeatedly do this when setting text
+        var trap = $ax.expr.displayWidgetAndParents(repeaterId);
+
         //$ax.style.startSuspendTextAlignment();
         // Now load
         for(pos = start; pos < end || deleteLastItems; pos++) {
@@ -343,6 +355,8 @@ $axure.internal(function($ax) {
             deleteLastItems = false;
             $ax.loadDynamicPanelsAndMasters(obj.objects, path, itemId);
         }
+
+        if(trap) trap();
         //$ax.style.resumeSuspendTextAlignment();
 
         $ax.removeCachedRepeaterInfo(repeaterId);
@@ -2252,14 +2266,15 @@ $axure.internal(function ($ax) {
     }
     _dynamicPanelManager.getPanelStateSizeDelta = getPanelStateSizeDelta;
 
-    var setPanelSizeChange = function (scriptId, size) {
-        panelSizeChanges[scriptId] = size;
+    var setPanelSizeChange = function (scriptId, oldState, newState) {
+        panelSizeChanges[scriptId] = {old: oldState, new: newState};
     }
     _dynamicPanelManager.setPanelSizeChange = setPanelSizeChange;
 
 
     var getPanelSizeChange = function (scriptId) {
-        return panelSizeChanges[scriptId];
+        var changes = panelSizeChanges[scriptId];
+        return getPanelStateSizeDelta(changes.old, changes.new);
     }
     _dynamicPanelManager.getPanelSizeChange = getPanelSizeChange;
 
@@ -2362,7 +2377,8 @@ $axure.internal(function ($ax) {
             var clampPropValueCss = clampLoc.css(clamp.prop);
             var clampPropValue = clampPropValueCss.endsWith('%') ? 
                 (vert ? clampLoc.width() : clampLoc.height()) * (Number(clampPropValueCss.replace('%', '')) / 100) :
-                $ax.getNumFromPx(clampPropValueCss);
+                $ax('#' + id)[clamp.prop](true);
+                // $ax.getNumFromPx(clampPropValueCss);
 
             var clampPropMarginCss = clampLoc.css('margin-' + clamp.prop);
             var clampPropMargin = clampPropMarginCss.endsWith('%') ?
@@ -2492,6 +2508,8 @@ $axure.internal(function ($ax) {
         var toMove = [];
         var allMove = true;
         if (isNaN(complimentaryDelta)) complimentaryDelta = 0;
+
+        var parentids  = $ax('#' + id).getParents(true, ['layer', 'rdo'])[0];
         for (var i = 0; i < children.length; i++) {
             var child = $(children[i]);
 
@@ -2509,7 +2527,7 @@ $axure.internal(function ($ax) {
                 continue;
             }
 
-            if($ax.public.fn.IsLayer($ax.getTypeFromElementId(childId))) {
+            if($ax.public.fn.IsLayerOrRdo($ax.getTypeFromElementId(childId))) {
                 // containerizing children can cause layout thrashing, if no children will possibly need to be moved based on layer position/size then don't do it
                 if (!_layerMayNeedCompress(childId, vert, threshold, clamp, parentLayer)) {
                     allMove = false;
@@ -2527,7 +2545,7 @@ $axure.internal(function ($ax) {
                 var threshProp = clamp.prop == 'left' ? offsetY : offsetX;
                 var layerClamp = { prop: clamp.prop, offset: clamp.offset, start: clamp.start + clampProp, end: clamp.end + clampProp };
                 
-                if($ax.getLayerParentFromElementId(id) != childId && _objectNeedsCompress(childId, vert, threshold, clamp, parentLayer)) addSelf = true;
+                if(!parentids.includes(childId) && _objectNeedsCompress(childId, vert, threshold, clamp, parentLayer)) addSelf = true;
                 else addSelf = _compressChildrenHelper(id, layerChildren, vert, threshold + threshProp, delta, layerClamp, easing, duration, childId);
                 
                 if(addSelf) toMove.push(childId);

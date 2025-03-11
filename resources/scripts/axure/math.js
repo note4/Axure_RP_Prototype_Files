@@ -85,20 +85,6 @@
         return "Matrix(" + m11 + "," + m21 + "," + m12 + "," + m22 + ", " + tx + ", " + ty + ")";
     }
     
-    //$ax.public.fn.getWidgetBoundingRect = function (widgetId) {
-    //    var emptyRect = { left: 0, top: 0, centerPoint: { x: 0, y: 0 }, width: 0, height: 0 };
-    //    var element = document.getElementById(widgetId);
-    //    if (!element) return emptyRect;
-
-    //    var object = $obj(widgetId);
-    //    if (object && object.type && $ax.public.fn.IsLayer(object.type)) {
-    //        var layerChildren = _getLayerChildrenDeep(widgetId);
-    //        if (!layerChildren) return emptyRect;
-    //        else return _getBoundingRectForMultipleWidgets(layerChildren);
-    //    }
-    //    return _getBoundingRectForSingleWidget(widgetId);
-    //};
-
     var _getLayerChildrenDeep = $ax.public.fn.getLayerChildrenDeep = function (layerId, includeLayers, includeHidden) {
         var deep = [];
         var children = $ax('#' + layerId).getChildren()[0].children;
@@ -113,113 +99,6 @@
         }
         return deep;
     };
-
-    //var _getBoundingRectForMultipleWidgets = function (widgetsIdArray, relativeToPage) {
-    //    if (!widgetsIdArray || widgetsIdArray.constructor !== Array) return undefined;
-    //    if (widgetsIdArray.length == 0) return { left: 0, top: 0, centerPoint: { x: 0, y: 0 }, width: 0, height: 0 };
-    //    var widgetRect = _getBoundingRectForSingleWidget(widgetsIdArray[0], relativeToPage, true);
-    //    var boundingRect = { left: widgetRect.left, right: widgetRect.right, top: widgetRect.top, bottom: widgetRect.bottom };
-
-    //    for (var index = 1; index < widgetsIdArray.length; index++) {
-    //        widgetRect = _getBoundingRectForSingleWidget(widgetsIdArray[index], relativeToPage);
-    //        boundingRect.left = Math.min(boundingRect.left, widgetRect.left);
-    //        boundingRect.top = Math.min(boundingRect.top, widgetRect.top);
-    //        boundingRect.right = Math.max(boundingRect.right, widgetRect.right);
-    //        boundingRect.bottom = Math.max(boundingRect.bottom, widgetRect.bottom);
-    //    }
-
-    //    boundingRect.centerPoint = { x: (boundingRect.right + boundingRect.left) / 2.0, y: (boundingRect.bottom + boundingRect.top) / 2.0 };
-    //    boundingRect.width = boundingRect.right - boundingRect.left;
-    //    boundingRect.height = boundingRect.bottom - boundingRect.top;
-    //    return boundingRect;
-    //};
-
-    //var _getBoundingRectForSingleWidget = function (widgetId, relativeToPage, justSides) {
-    //    var element = document.getElementById(widgetId);
-    //    var boundingRect, tempBoundingRect, position;
-    //    var displayChanged = _displayHackStart(element);
-
-    //    if (_isCompoundVectorHtml(element)) {
-    //        //tempBoundingRect =  _getCompoundImageBoundingClientSize(widgetId);
-    //        //position = { left: tempBoundingRect.left, top: tempBoundingRect.top };
-    //        position = $(element).position();
-    //        tempBoundingRect = {};
-    //        tempBoundingRect.left = position.left; //= _getCompoundImageBoundingClientSize(widgetId);
-    //        tempBoundingRect.top = position.top;
-    //        tempBoundingRect.width = Number(element.getAttribute('data-width'));
-    //        tempBoundingRect.height = Number(element.getAttribute('data-height'));
-    //    } else {
-    //        var boundingElement = element;
-    //        if($ax.dynamicPanelManager.isIdFitToContent(widgetId)) {
-    //            var stateId = $ax.visibility.GetPanelState(widgetId);
-    //            if(stateId != '') boundingElement = document.getElementById(stateId);
-    //        }
-    //        tempBoundingRect = boundingElement.getBoundingClientRect();
-
-    //        var jElement = $(element);
-    //        position = jElement.position();
-    //        if(jElement.css('position') == 'fixed') {
-    //            position.left += Number(jElement.css('margin-left').replace("px", ""));
-    //            position.top += Number(jElement.css('margin-top').replace("px", ""));
-    //        }
-    //    }
-
-    //    var layers = $ax('#' + widgetId).getParents(true, ['layer'])[0];
-    //    var flip = '';
-    //    var mirrorWidth = 0;
-    //    var mirrorHeight = 0;
-    //    for (var i = 0; i < layers.length; i++) {
-
-    //        //should always be 0,0
-    //        var layerPos = $jobj(layers[i]).position();
-    //        position.left += layerPos.left;
-    //        position.top += layerPos.top;
-
-    //        var outer = $ax.visibility.applyWidgetContainer(layers[i], true, true);
-    //        if (outer.length) {
-    //            var outerPos = outer.position();
-    //            position.left += outerPos.left;
-    //            position.top += outerPos.top;
-    //        }
-
-    //        //when a group is flipped we find the unflipped position
-    //        var inner = $jobj(layers[i] + '_container_inner');
-    //        var taggedFlip = inner.data('flip');
-    //        if (inner.length && taggedFlip) {
-    //            //only account for flip if transform is applied
-    //            var matrix = taggedFlip && (inner.css("-webkit-transform") || inner.css("-moz-transform") ||
-    //                        inner.css("-ms-transform") || inner.css("-o-transform") || inner.css("transform"));
-    //            if (matrix !== 'none') {
-    //                flip = taggedFlip;
-    //                mirrorWidth = $ax.getNumFromPx(inner.css('width'));
-    //                mirrorHeight = $ax.getNumFromPx(inner.css('height'));
-    //            }
-    //        }
-    //    }
-    //     //Now account for flip
-    //    if (flip == 'x') position.top = mirrorHeight - position.top - element.getBoundingClientRect().height;
-    //    else if (flip == 'y') position.left = mirrorWidth - position.left - element.getBoundingClientRect().width;
-
-    //    boundingRect = {
-    //        left: position.left,
-    //        right: position.left + tempBoundingRect.width,
-    //        top: position.top,
-    //        bottom: position.top + tempBoundingRect.height
-    //    };
-
-    //    _displayHackEnd(displayChanged);
-    //    if (justSides) return boundingRect;
-
-    //    boundingRect.width = boundingRect.right - boundingRect.left;
-    //    boundingRect.height = boundingRect.bottom - boundingRect.top;
-
-    //    boundingRect.centerPoint = {
-    //        x: boundingRect.width / 2 + boundingRect.left,
-    //        y: boundingRect.height / 2 + boundingRect.top
-    //    };
-
-    //    return boundingRect;
-    //};
 
     var _getPointAfterRotate = $ax.public.fn.getPointAfterRotate = function (angleInDegrees, pointToRotate, centerPoint) {
         var displacement = $ax.public.fn.vectorMinus(pointToRotate, centerPoint);
@@ -269,37 +148,6 @@
         return { left: left, top: top, width: right - left, height: bottom - top };
     }
 
-
-    //$ax.public.fn.getPositionRelativeToParent = function (elementId) {
-    //    var element = document.getElementById(elementId);
-    //    var list = _displayHackStart(element);
-    //    var position = $(element).position();
-    //    _displayHackEnd(list);
-    //    return position;
-    //};
-
-    //var _displayHackStart = $ax.public.fn.displayHackStart = function (element) {
-    //    // TODO: Options: 1) stop setting display none. Big change for this late in the game. 2) Implement our own bounding.
-    //    // TODO:  3) Current method is look for any parents that are set to none, and and temporarily unblock. Don't like it, but it works.
-    //    var parent = element;
-    //    var displays = [];
-    //    while (parent) {
-    //        if (parent.style.display == 'none') {
-    //            displays.push(parent);
-    //            //use block to overwrites default hidden objects' display
-    //            parent.style.display = 'block';
-    //        }
-    //        parent = parent.parentElement;
-    //    }
-
-    //    return displays;
-    //};
-
-    //var _displayHackEnd = $ax.public.fn.displayHackEnd = function (displayChangedList) {
-    //    for (var i = 0; i < displayChangedList.length; i++) displayChangedList[i].style.display = 'none';
-    //};
-
-
     var _isCompoundVectorHtml = $ax.public.fn.isCompoundVectorHtml = function(hElement) {
         return hElement.hasAttribute('compoundmode') && hElement.getAttribute('compoundmode') == "true";
     }
@@ -343,6 +191,8 @@
         
         var components = object.compoundChildren;
         delete object.generateCompound;
+
+        if(!components) return;
         for (var i = 0; i < components.length; i++) {
             var componentJobj = $jobj($ax.public.fn.getComponentId(widgetId, components[i]));
             componentJobj.css('display', 'none');

@@ -173,7 +173,7 @@ const GLOBAL_VAR_CHECKSUM = 'CSUM';
              let varValue = pair[1];
              if(varName) {
                  if(varName == GLOBAL_VAR_CHECKSUM) csum = true;
-                 else setAction(varName, decodeURIComponent(decodeURIComponent(varValue)), false);
+                 else setAction(varName, decodeURIComponent(decodeURIComponent(varValue)), true);
              }
          }
 

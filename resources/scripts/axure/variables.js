@@ -26,7 +26,7 @@ $axure.internal(function($ax) {
             _postGlobalVarVals();
         }
 
-        if(suppressBroadcast !== true && variableValueWasChanged) $ax.variableChangePageAndMasters(variable);
+        if(variableValueWasChanged) $ax.variableChangePageAndMasters(variable);
     };
     _globalVariableProvider.setVariableValue = setVariableValue;
 

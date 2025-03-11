@@ -542,8 +542,6 @@ $axure.internal(function ($ax) {
     };
 
     var _handleCaseGroup = function (eventInfo, caseGroup, groupRefreshes) {
-        $ax.style.disableStateTransitions();
-
         for(var i = 0; i < caseGroup.length; i++) {
             var currentCase = caseGroup[i];
             if(currentCase.disabled) continue;
@@ -1220,6 +1218,9 @@ $axure.internal(function ($ax) {
                     if(input.prop('selected')) {
                         $ax.updateRadioButtonSelected(radioGroupName, elementId);
                     }
+                    var selected = $ax.style.IsWidgetSelected(elementId);
+                    if (selected) $ax.style.SetWidgetSelected(elementId, selected, true);
+
                     var onClick = function(e) {
                         if ($ax.style.IsWidgetDisabled(elementId)) return;
                         if(radioGroupName !== elementId) {

@@ -811,14 +811,39 @@
         return 'rgba(' + red + ',' + green + ',' + blue + ',' + alpha + ')';
     };
 
-    var _enableStateTransitions = function () {
-        $('body').removeClass('notransition');
+    var _enableStateTransitions = function (id) {
+        var jobj = $jobj(id);
+        var hasNotrs = jobj.hasClass('notrs');
+        if(!hasNotrs) return false;
+        $jobj(id).removeClass('notrs');
+        return true;
     }
-    $ax.style.enableStateTransitions = _enableStateTransitions;
-    var _disableStateTransitions = function () {
-        $('body').addClass('notransition');
+    
+    var _idToDisableTimeout = {};
+
+    var disableStateTransitionsOnEnd = function(id, transition) {
+        var element = $jobj(id)[0];
+        var _clearListenerAndTimeout = function () {
+            element.removeEventListener('transitionend', _disableStateTransitions);
+            if (_idToDisableTimeout[id]) {
+                clearTimeout(_idToDisableTimeout[id]);
+                delete _idToDisableTimeout[id];
+            }
+        };
+
+        _clearListenerAndTimeout();
+
+        var _disableStateTransitions = function() {
+            $jobj(id).addClass('notrs');
+            _clearListenerAndTimeout();
+        }
+        
+        var hasTransition = transition && transition.easing != 'none' && transition.duration != 0;
+        if(hasTransition) {
+            element.addEventListener('transitionend', _disableStateTransitions);
+            _idToDisableTimeout[id] = window.setTimeout(_disableStateTransitions, 5000);
+        } else _disableStateTransitions();
     }
-    $ax.style.disableStateTransitions = _disableStateTransitions;
 
     var _idToAppliedStyles = {};
     $ax.style.isLastAppliedStyle = function (id, className) {
@@ -826,13 +851,22 @@
         return false;
     }
 
-    $ax.style.setApplyStyleTag = function (className, cssRule) {
+    $ax.style.setApplyStyleTag = function (styleTagId, cssRule, selectorIds, eventInfo, itemIndex) {
         var head = document.getElementsByTagName('head')[0];
-        var styleTag = head.querySelector('#' + className);
+        var styleTag = head.querySelector('#' + styleTagId);
         if (!styleTag) {
             styleTag = document.createElement('style');
             styleTag.type = 'text/css';
-            styleTag.id = className;
+            styleTag.id = styleTagId;
+
+            for (var i = 0; i < selectorIds.length; i++) {
+                var rep = "\\{" + i + "\\}";
+                var objectPath = selectorIds[i];
+                var elementIds = $ax.getElementIdsFromPath(objectPath, eventInfo);
+                var id = elementIds[itemIndex];
+                cssRule = cssRule.replace(new RegExp(rep, "g"), id);
+            }
+
             styleTag.innerHTML = cssRule;
         }
         head.appendChild(styleTag);
@@ -841,19 +875,9 @@
     $ax.style.applyWidgetStyle = function (id, className, style, image, clearPrevious) {
         if (!clearPrevious && $ax.style.isLastAppliedStyle(id, className)) return;
 
-        _enableStateTransitions();
-        if (clearPrevious && _idToAppliedStyles[id] && _idToAppliedStyles[id].classList) {
-            for (var i = 0; i < _idToAppliedStyles[id].classList.length; i++) {
-                var classNameToRemove = _idToAppliedStyles[id].classList[i];
-                $jobj(id).removeClass(classNameToRemove);
-                $jobj($ax.repeater.applySuffixToElementId(id, '_div')).removeClass(classNameToRemove);
-                $jobj($ax.repeater.applySuffixToElementId(id, '_text')).removeClass(classNameToRemove);
-                $jobj($ax.repeater.applySuffixToElementId(id, '_input')).removeClass(classNameToRemove);
-            }
-            _idToAppliedStyles[id] = {
-                classList: [],
-                style: {},
-            };
+        var hasNotrs = _enableStateTransitions(id);
+        if (clearPrevious) {
+            _clearWidgetAppliedStyles(id);
         }
 
         if (_idToAppliedStyles[id] && _idToAppliedStyles[id].classList && _idToAppliedStyles[id].style) {
@@ -878,33 +902,94 @@
         $jobj($ax.repeater.applySuffixToElementId(id, '_text')).addClass(className);
         $jobj($ax.repeater.applySuffixToElementId(id, '_input')).addClass(className);
 
+        const state = _generateState(id);
+        var fullStyle = $.extend(_computeFullStyle(id, state, $ax.adaptive.currentViewId), _idToAppliedStyles[id].style);
+
         if ($ax.public.fn.IsImageBox($obj(id).type)) {
             if (image) {
                 _applyImage(id, image, "interaction");
             }
-        } else {
-            _applySvg(id, "interaction", $.extend(_computeFullStyle(id, "interaction", $ax.adaptive.currentViewId), _idToAppliedStyles[id].style));
+        } else {                        
+            _applySvg(id, "interaction", fullStyle);
+        }
+
+        _updateCornersForBorders(id, fullStyle);
+
+        if(hasNotrs) disableStateTransitionsOnEnd(id, _idToAppliedStyles[id].style.transition);
+    }
+
+    var _clearWidgetAppliedCorners = function(jobjDiv) {
+        jobjDiv.removeClass('nocrntl');
+        jobjDiv.removeClass('nocrntr');
+        jobjDiv.removeClass('nocrnbr');
+        jobjDiv.removeClass('nocrnbl');
+    }
+
+    var _updateCornersForBorders = function(id, fullStyle) {
+        var jobjDiv = $jobj($ax.repeater.applySuffixToElementId(id, '_div'));
+        if(jobjDiv.length == 0) return;
+
+        _clearWidgetAppliedCorners(jobjDiv);
+
+        var cornerRadius = fullStyle.cornerRadius;
+        var hasCornerRadius = cornerRadius > 0;
+        if(hasCornerRadius){
+            var borderVisibility = fullStyle.borderVisibility;
+            var hasBorderTop = borderVisibility.includes("top");
+            var hasBorderRight = borderVisibility.includes("right");
+            var hasBorderBottom = borderVisibility.includes("bottom");
+            var hasBorderLeft = borderVisibility.includes("left");
+
+            var cornerVisibility = fullStyle.cornerVisibility;
+            hasCornerTopRight = cornerVisibility.includes("top") && hasBorderTop == hasBorderRight;
+            hasCornerBottomRight = cornerVisibility.includes("right") && hasBorderBottom == hasBorderRight;
+            hasCornerBottomLeft = cornerVisibility.includes("bottom") && hasBorderBottom == hasBorderLeft;
+            hasCornerTopLeft = cornerVisibility.includes("left") && hasBorderTop == hasBorderLeft;
+
+
+            if(!hasCornerTopLeft) jobjDiv.addClass('nocrntl');
+            if(!hasCornerTopRight) jobjDiv.addClass('nocrntr');
+            if(!hasCornerBottomRight) jobjDiv.addClass('nocrnbr');
+            if(!hasCornerBottomLeft) jobjDiv.addClass('nocrnbl');
         }
     }
 
-    $axure.messageCenter.addMessageListener(function (message, data) {
-        if (message == "switchAdaptiveView") {
-            var ids = Object.keys(_idToAppliedStyles);
-            for (var i = 0; i < ids.length; i++) {
-                var id = ids[i];
-                for (var j = 0; j < _idToAppliedStyles[id].length; j++) {
-                    var className = _idToAppliedStyles[id][j];
-                    $jobj(id).removeClass(className);
-                    $jobj($ax.repeater.applySuffixToElementId(id, '_div')).removeClass(className);
-                    $jobj($ax.repeater.applySuffixToElementId(id, '_text')).removeClass(className);
-                    $jobj($ax.repeater.applySuffixToElementId(id, '_input')).removeClass(className);
-                }
+    _clearWidgetAppliedStyles = function (id) {
+        if (_idToAppliedStyles[id] && _idToAppliedStyles[id].classList) {
+            for (var i = 0; i < _idToAppliedStyles[id].classList.length; i++) {
+                var classNameToRemove = _idToAppliedStyles[id].classList[i];
+                $jobj(id).removeClass(classNameToRemove);
+                
+                var jobjDiv = $jobj($ax.repeater.applySuffixToElementId(id, '_div'));
+                jobjDiv.removeClass(classNameToRemove);
+                _clearWidgetAppliedCorners(jobjDiv);
+
+                $jobj($ax.repeater.applySuffixToElementId(id, '_text')).removeClass(classNameToRemove);
+                $jobj($ax.repeater.applySuffixToElementId(id, '_input')).removeClass(classNameToRemove);        
             }
-            _idToAppliedStyles = {};
+
+            delete _idToAppliedStyles[id];
         }
-    });
+    }
+
+    $ax.style.clearAppliedStyles = function () {
+        var ids = Object.keys(_idToAppliedStyles);
+        for (var i = 0; i < ids.length; i++) {
+            _clearWidgetAppliedStyles(ids[i]);
+        }
+
+        _idToAppliedStyles = {};
+    };
 
     var _applySvg = function (id, event, style) {
+
+        //is svg if compound or img is svg
+        var obj = $obj(id);
+        if (!obj.generateCompound) {
+            const svgContainerId = id + "_img";
+            const container = document.getElementById(svgContainerId);
+            if (!container || container.tagName.toLowerCase() != "svg") return;
+        }        
 
         let overridedStyle = style;
         if (!overridedStyle) {
@@ -914,29 +999,21 @@
             }
         }
         const originalBorderWidth = _computeFullStyle(id, "normal", $ax.adaptive.currentViewId).borderWidth;
-        const transition = "transition:" + $jobj(id).css('transition') + ", d 0s" + ";";
         if(!$.isEmptyObject(overridedStyle)) {
+            const transition = (overridedStyle.transition ? ('transition: ' + overridedStyle.transition.css) : '') + ", d 0s;";
 
-            //TODO
-            //Background Image
-            //Maybe change SVG gen to use filter for Inner shadows instead of image
-            //Radial Gradients
-            //Correct Dash Array and Offset
-            //compound is currently generating more image files than needed - audit other places
-            //Line ends on compound
-            //Image widgets than gen as SVG due to props
-
-            function applyStyleOverrides(contentDoc, overridedStyle) {
-                if(!contentDoc) return;
+            function applyStyleOverrides(svgId, overridedStyle) {
+                //if(!contentDoc) return;
                 var svgns = 'http://www.w3.org/2000/svg';              
-                var svgTag = contentDoc.getElementsByTagName("svg")[0];
+                //var svgTag = contentDoc.getElementsByTagName("svg")[0];
+                var svgTag = document.getElementById(svgId);
                 var style = svgTag.getElementsByTagName("style")[0];
                 var viewBox = svgTag.getAttribute("viewBox");
                 var viewBoxValues = viewBox && viewBox.split(" ");
                 var viewBoxX = parseFloat(viewBoxValues && viewBoxValues[0]) || 0;
                 var viewBoxY = parseFloat(viewBoxValues && viewBoxValues[1]) || 0;
                 if(!style) {
-                    style = contentDoc.createElementNS(svgns, "style");
+                    style = document.createElementNS(svgns, "style");
                     svgTag.appendChild(style);
                 }
                 var styleHtml = "";
@@ -952,20 +1029,21 @@
                     if (overridedStyle.image) {
                         var defsTag = svgTag.getElementsByTagName("defs")[0];
                         if (!defsTag) {
-                            defsTag = contentDoc.createElementNS(svgns, "defs");
+                            defsTag = document.createElementNS(svgns, "defs");
                             svgTag.appendChild(defsTag);
                         }
-                        var pattern = defsTag.querySelector("#background-image-pattern");
+                        var bgPatternId = "#" + svgId + "_bgp";
+                        var pattern = defsTag.querySelector(bgPatternId);
                         var image = pattern.querySelector("image");
                         if (!image) {
-                            image = contentDoc.createElementNS(svgns, "image");
+                            image = document.createElementNS(svgns, "image");
                             image.setAttribute("preserveAspectRatio", "none");
                             pattern.appendChild(image);
 
                             var fillElement = svgTag.querySelector(".fill");
                             var backgroundElement = fillElement.cloneNode();
                             backgroundElement.setAttribute("class", "background-image");
-                            backgroundElement.setAttribute("fill", "url(#background-image-pattern)");
+                            backgroundElement.setAttribute("fill", "url(" + bgPatternId + ")");
                             fillElement.after(backgroundElement);
                         }
                         image.setAttribute("href", overridedStyle.image.path);
@@ -985,7 +1063,7 @@
                         var alignment = pattern.getAttribute("alignment").split(" ");
                         var horizontalAlignment = alignment[0];
                         var verticalAlignment = alignment[1];
-                        var repeat = pattern.getAttribute("imageRepeat");
+                        var repeat = pattern.getAttribute("imagerepeat");
 
                         if (repeat === "Repeat" || repeat === "RepeatX" || repeat === "RepeatY" || repeat === "None") {
                             if (horizontalAlignment == 2) imageRect.x = patternRect.width - imageRect.width;
@@ -1010,7 +1088,7 @@
                             if (hRatio > wRatio) ratio = hRatio;
 
                             var newWidth = imageRect.width * ratio;
-                            var newHeight = imageRect.height;
+                            var newHeight = imageRect.height * ratio;
 
                             var left = 0;
                             if (newWidth > patternRect.width) {
@@ -1019,7 +1097,7 @@
                             }
 
                             var top = 0;
-                            if (newHeight > viewPort.height) {
+                            if(newHeight > patternRect.height) {
                                 if (verticalAlignment == 1) top = (patternRect.height - newHeight) / 2;
                                 else if (verticalAlignment == 2) top = patternRect.height - newHeight;
                             }
@@ -1056,7 +1134,7 @@
                         pattern.setAttribute("width", patternRect.width);
                         pattern.setAttribute("height", patternRect.height);
                     } else {
-                        styleHtml += ".background-image { fill: rgba(0,0,0,0); } "
+                        styleHtml += "#" + svgId + " .background-image { fill: rgba(0,0,0,0); } "
                     }
                 }
 
@@ -1082,7 +1160,7 @@
                         fillStyle += transition;
                     }
 
-                    styleHtml += ".fill { " + fillStyle + " } "
+                    styleHtml += "#" + svgId + " .fill { " + fillStyle + " } "
                 }
 
                 function setBorder() {
@@ -1100,9 +1178,9 @@
                                 borderStyle += "stroke: url(#" + gradientId + "); ";
                                 arrowHeadStyle += "stroke: url(#" + gradientId + "); fill: url(#" + gradientId + "); ";
                             } else {
-                                var arrowhead = contentDoc.querySelector(".arrowhead");
+                                var arrowhead = svgTag.querySelector(".arrowhead");
                                 if (arrowhead) {
-                                    var fill = window.getComputedStyle(contentDoc.querySelector(".stroke")).stroke;
+                                    var fill = window.getComputedStyle(svgTag.querySelector(".stroke")).stroke;
                                     arrowhead.setAttribute("fill", fill);
                                     arrowhead.setAttribute("stroke", fill);
                                 }
@@ -1113,9 +1191,9 @@
                                 borderStyle += "stroke: url(#" + gradientId + "); ";
                                 arrowHeadStyle += "stroke: url(#" + gradientId + "); fill: url(#" + gradientId + "); ";
                             } else {
-                                var arrowhead = contentDoc.querySelector(".arrowhead");
+                                var arrowhead = svgTag.querySelector(".arrowhead");
                                 if (arrowhead) {
-                                    var fill = window.getComputedStyle(contentDoc.querySelector(".stroke")).stroke;
+                                    var fill = window.getComputedStyle(svgTag.querySelector(".stroke")).stroke;
                                     arrowhead.setAttribute("fill", fill);
                                     arrowhead.setAttribute("stroke", fill);
                                 }
@@ -1133,32 +1211,41 @@
                             var fills = svgTag.getElementsByClassName("fill");
                             if (obj.friendlyType === "Rectangle") {
                                 var size = overridedStyle.size;
+                                size = { width: Math.round(size.width), height: Math.round(size.height) };
                                 var hasBorderTop = overridedStyle.borderVisibility.includes("top");
                                 var hasBorderRight = overridedStyle.borderVisibility.includes("right");
                                 var hasBorderBottom = overridedStyle.borderVisibility.includes("bottom");
                                 var hasBorderLeft = overridedStyle.borderVisibility.includes("left");
 
-                                var hasCornerTopRight = overridedStyle.cornerVisibility.includes("top");
-                                var hasCornerBottomRight = overridedStyle.cornerVisibility.includes("right");
-                                var hasCornerBottomLeft = overridedStyle.cornerVisibility.includes("bottom");
-                                var hasCornerTopLeft = overridedStyle.cornerVisibility.includes("left");
+                                var cornerRadius = overridedStyle.cornerRadius;
+                                var hasCornerRadius = cornerRadius > 0;
+                                var hasCornerTopRight = hasCornerRadius && overridedStyle.cornerVisibility.includes("top") && hasBorderTop && hasBorderRight;
+                                var hasCornerBottomRight = hasCornerRadius && overridedStyle.cornerVisibility.includes("right") && hasBorderBottom && hasBorderRight;
+                                var hasCornerBottomLeft = hasCornerRadius && overridedStyle.cornerVisibility.includes("bottom") && hasBorderBottom && hasBorderLeft;
+                                var hasCornerTopLeft = hasCornerRadius && overridedStyle.cornerVisibility.includes("left") && hasBorderTop && hasBorderLeft;
 
-                                var cornerRadius = Math.min(overridedStyle.cornerRadius, Math.min(size.width, size.height));
+                                var restrictToHalfHeight = hasCornerTopLeft && hasCornerBottomLeft || hasCornerTopRight && hasCornerBottomRight;
+                                var restrictToHalfWidth = hasCornerTopLeft && hasCornerTopRight || hasCornerBottomLeft && hasCornerBottomRight;
+                                var heightCeiling = restrictToHalfHeight ? size.height/2.0 : size.height;
+                                var widthCeiling = restrictToHalfWidth ? size.width/2.0 : size.width;
+                                var radiusCeiling = Math.min(heightCeiling, widthCeiling);
+                                var cornerRadius = Math.min(cornerRadius, radiusCeiling);
+
                                 var arcK = 0.44;
                                 var halfWidth = newBorderWidth / 2;
-                                var left = halfWidth;
-                                var top = halfWidth;
-                                var right = size.width - halfWidth;
-                                var bottom = size.height - halfWidth;
+                                var left = hasBorderLeft ? halfWidth : 0;
+                                var top = hasBorderTop ? halfWidth : 0;
+                                var right = size.width - (hasBorderRight ? halfWidth : 0);
+                                var bottom = size.height - (hasBorderBottom ? halfWidth : 0);
                                 var arc = (cornerRadius - halfWidth) * arcK + halfWidth;
 
                                 var segments = [];
                                 function fillTop(start) {
                                     if (hasBorderTop) {
-                                        if (start && hasCornerTopLeft && hasBorderLeft) segments.push("M " + cornerRadius + " " + top);
+                                        if (start && hasCornerTopLeft) segments.push("M " + cornerRadius + " " + top);
                                         else if (start || !hasBorderLeft) segments.push("M " + left + " " + top);
 
-                                        if (hasCornerTopRight && hasBorderRight) {
+                                        if (hasCornerTopRight) {
                                             segments.push("L " + (size.width - cornerRadius) + " " + top);
                                             segments.push("C " + (size.width - arc) + " " + top + " " + right + " " + arc + " " + right + " " + cornerRadius);
                                         } else segments.push("L " + right + " " + top);
@@ -1167,10 +1254,10 @@
                                 }
                                 function fillRight(start) {
                                     if (hasBorderRight) {
-                                        if (start && hasCornerTopRight && hasBorderTop) segments.push("M " + right + " " + cornerRadius);
+                                        if (start && hasCornerTopRight) segments.push("M " + right + " " + cornerRadius);
                                         else if (start || !hasBorderTop) segments.push("M " + right + " " + top);
 
-                                        if (hasCornerBottomRight && hasBorderBottom) {
+                                        if (hasCornerBottomRight) {
                                             segments.push("L " + right + " " + (size.height - cornerRadius));
                                             segments.push("C " + right + " " + (size.height - arc) + " " + (size.width - arc) + " " + bottom + " " + (size.width - cornerRadius) + " " + bottom);
                                         } else segments.push("L " + right + " " + bottom);
@@ -1178,11 +1265,11 @@
                                     return fillBottom;
                                 }
                                 function fillBottom(start) {
-                                    if (hasBorderBottom) {
-                                        if (start && hasCornerBottomRight && hasBorderRight) segments.push("M " + right + " " + (size.height - cornerRadius));
+                                    if (hasBorderBottom) {                                        
+                                        if (start && hasCornerBottomRight) segments.push("M " + right + " " + (size.height - cornerRadius));
                                         else if (start || !hasBorderRight) segments.push("M " + right + " " + bottom);
 
-                                        if (hasCornerBottomLeft && hasBorderLeft) {
+                                        if (hasCornerBottomLeft) {
                                             segments.push("L " + cornerRadius + " " + bottom);
                                             segments.push("C " + arc + " " + bottom + " " + left + " " + (size.height - arc) + " " + left + " " + (size.height - cornerRadius));
                                         } else segments.push("L " + left + " " + bottom);
@@ -1191,10 +1278,10 @@
                                 }
                                 function fillLeft(start) {
                                     if (hasBorderLeft) {
-                                        if (start && hasCornerBottomLeft && hasBorderBottom) segments.push("M " + left + " " + (size.height - cornerRadius));
+                                        if (start && hasCornerBottomLeft) segments.push("M " + left + " " + (size.height - cornerRadius));
                                         else if (start || !hasBorderBottom) segments.push("M " + left + " " + bottom);
 
-                                        if (hasCornerTopLeft && hasBorderTop) {
+                                        if (hasCornerTopLeft) {
                                             segments.push("L " + left + " " + cornerRadius);
                                             segments.push("C " + left + " " + arc + " " + arc + " " + top + " " + cornerRadius + " " + top);
                                         } else segments.push("L " + left + " " + top);
@@ -1210,9 +1297,28 @@
                                     fillTop(true)(false)(false)(false);
                                     segments.push("Z");
                                 }
-
                                 var d = segments.join(" ");
-                                for (var path of [...strokes, ...fills]) {
+                                for(var path of [...strokes]) {
+                                    path.setAttribute("d", d);
+                                    path.setAttribute("mask", "");
+                                }
+
+                                segments = [];
+                                hasCornerTopRight = hasCornerRadius && overridedStyle.cornerVisibility.includes("top") && hasBorderTop == hasBorderRight;
+                                hasCornerBottomRight = hasCornerRadius && overridedStyle.cornerVisibility.includes("right") && hasBorderBottom == hasBorderRight;
+                                hasCornerBottomLeft = hasCornerRadius && overridedStyle.cornerVisibility.includes("bottom") && hasBorderBottom == hasBorderLeft;
+                                hasCornerTopLeft = hasCornerRadius && overridedStyle.cornerVisibility.includes("left") && hasBorderTop == hasBorderLeft;
+                                hasBorderTop = hasBorderRight = hasBorderBottom = hasBorderLeft = true;                                
+                                left = 0;
+                                top = 0;
+                                right = size.width;
+                                bottom = size.height;
+                                arc = cornerRadius * arcK;
+
+                                fillTop(true)(false)(false)(false);
+                                segments.push("Z");
+                                d = segments.join(" ");
+                                for(var path of [ ...fills]) {
                                     path.setAttribute("d", d);
                                     path.setAttribute("mask", "");
                                 }
@@ -1246,13 +1352,27 @@
                         arrowHeadStyle += transition;
                     }
 
-                    styleHtml += ".stroke { " + borderStyle + " } ";
-                    styleHtml += ".arrowhead { " + arrowHeadStyle + " } ";
+                    styleHtml += "#" + svgId + " .stroke { " + borderStyle + " } ";
+                    styleHtml += "#" + svgId + " .arrowhead { " + arrowHeadStyle + " } ";
+
+                    if($ax.public.fn.IsCheckBox(obj.type)) {
+                        var checkWidth = 3 * obj.buttonSize / 14;
+                        
+                        styleHtml += "#" + svgId + " .stroke.btn_check { stroke-width: " + checkWidth + "; } ";
+                    } else if($ax.public.fn.IsRadioButton(obj.type)) {
+                        if (overridedStyle.borderFill) {
+                            var styleFill = overridedStyle.borderFill;
+                            if (styleFill.fillType == "solid") {
+                                var borderColor = _getColorFromFill(styleFill);
+                                styleHtml += "#" + svgId + " .stroke.btn_check { fill: " + borderColor + "; } ";
+                            }
+                        }
+                    }
                 }
 
                 function setOuterShadow() {
                     if (overridedStyle.outerShadow && overridedStyle.outerShadow.on) {
-                        var dropShadowStyle = "svg { filter: drop-shadow(" +
+                        var dropShadowStyle = "#" + svgId + " { filter: drop-shadow(" +
                             overridedStyle.outerShadow.offsetX + "px " +
                             overridedStyle.outerShadow.offsetY + "px " +
                             overridedStyle.outerShadow.blurRadius + "px " +
@@ -1260,7 +1380,7 @@
                             transition + "} ";
                         styleHtml += dropShadowStyle;
                     } else {
-                        var dropShadowStyle = "svg { " + transition + " } ";
+                        var dropShadowStyle = "#" + svgId + " { " + transition + " } ";
                         styleHtml += dropShadowStyle
                     }
                 }
@@ -1285,11 +1405,11 @@
                         } else {
                             var defsTag = svgTag.getElementsByTagName("defs")[0];
                             if (!defsTag) {
-                                defsTag = contentDoc.createElementNS(svgns, "defs");
+                                defsTag = document.createElementNS(svgns, "defs");
                                 svgTag.appendChild(defsTag);
                             }
-                            filterTag = contentDoc.createElementNS(svgns, "filter");
-                            innerShadowFilterId = "innerShadowFilter";
+                            filterTag = document.createElementNS(svgns, "filter");
+                            innerShadowFilterId = svgId + "innerShadowFilter";
                             filterTag.setAttribute("x", "-50%");
                             filterTag.setAttribute("y", "-50%");
                             filterTag.setAttribute("width", "200%");
@@ -1297,7 +1417,7 @@
                             filterTag.setAttribute("filterUnits", "objectBoundingBox");
                             filterTag.setAttribute("id", innerShadowFilterId);
 
-                            var feOffset = contentDoc.createElementNS(svgns, "feOffset");
+                            var feOffset = document.createElementNS(svgns, "feOffset");
                             feOffset.setAttribute("dx", overridedStyle.innerShadow.offsetX);
                             feOffset.setAttribute("dy", overridedStyle.innerShadow.offsetY);
                             feOffset.setAttribute("in", "SourceGraphic");
@@ -1305,7 +1425,7 @@
                             feOffset.setAttribute("id", "offset");
                             filterTag.appendChild(feOffset);
 
-                            var feMorphology = contentDoc.createElementNS(svgns, "feMorphology");
+                            var feMorphology = document.createElementNS(svgns, "feMorphology");
                             feMorphology.setAttribute("radius", +overridedStyle.borderWidth + overridedStyle.innerShadow.spread);
                             feMorphology.setAttribute("operator", "erode");
                             feMorphology.setAttribute("in", "offset");
@@ -1313,14 +1433,14 @@
                             feMorphology.setAttribute("id", "morphology");
                             filterTag.appendChild(feMorphology);
 
-                            var feBlur = contentDoc.createElementNS(svgns, "feGaussianBlur");
+                            var feBlur = document.createElementNS(svgns, "feGaussianBlur");
                             feBlur.setAttribute("stdDeviation", overridedStyle.innerShadow.blurRadius / 2);
                             feBlur.setAttribute("in", "morphology");
                             feBlur.setAttribute("result", "blur");
                             feBlur.setAttribute("id", "blur");
                             filterTag.appendChild(feBlur);
 
-                            var feComposite1 = contentDoc.createElementNS(svgns, "feComposite");
+                            var feComposite1 = document.createElementNS(svgns, "feComposite");
                             feComposite1.setAttribute("in2", "blur");
                             feComposite1.setAttribute("operator", "out");
                             feComposite1.setAttribute("in", "SourceGraphic");
@@ -1328,14 +1448,14 @@
                             feComposite1.setAttribute("id", "inverse");
                             filterTag.appendChild(feComposite1);
 
-                            var feFlood = contentDoc.createElementNS(svgns, "feFlood");
+                            var feFlood = document.createElementNS(svgns, "feFlood");
                             feFlood.setAttribute("flood-color", _getCssColor(overridedStyle.innerShadow.color));
                             feFlood.setAttribute("in", "inverse");
                             feFlood.setAttribute("result", "color");
                             feFlood.setAttribute("id", "color");
                             filterTag.appendChild(feFlood);
 
-                            var feComposite2 = contentDoc.createElementNS(svgns, "feComposite");
+                            var feComposite2 = document.createElementNS(svgns, "feComposite");
                             feComposite2.setAttribute("in2", "inverse");
                             feComposite2.setAttribute("operator", "in");
                             feComposite2.setAttribute("in", "color");
@@ -1343,7 +1463,7 @@
                             feComposite2.setAttribute("id", "shadow");
                             filterTag.appendChild(feComposite2);
 
-                            var feComposite3 = contentDoc.createElementNS(svgns, "feComposite");
+                            var feComposite3 = document.createElementNS(svgns, "feComposite");
                             feComposite3.setAttribute("in2", "SourceGraphic");
                             feComposite3.setAttribute("operator", "over");
                             feComposite3.setAttribute("in", "shadow");
@@ -1351,7 +1471,7 @@
 
                             defsTag.appendChild(filterTag);
                         }
-                        var innerShadowCss = ".fill, .background-image { filter:url('#" + innerShadowFilterId + "');} ";
+                        var innerShadowCss = "#" + svgId + " .fill, " + "#" + svgId + " .background-image { filter:url('#" + innerShadowFilterId + "');} ";
                         styleHtml += innerShadowCss;
                     }
                 }
@@ -1362,7 +1482,7 @@
                 function insertLinearGradient(gradientId, styleFill, propName) {
                     var defsTag = svgTag.getElementsByTagName("defs")[0];
                     if (!defsTag) {
-                        defsTag = contentDoc.createElementNS(svgns, "defs");
+                        defsTag = document.createElementNS(svgns, "defs");
                         svgTag.appendChild(defsTag);
                     }
                     var stops = styleFill.stops;
@@ -1370,10 +1490,10 @@
                     //clean up old non-default gradients
                     defsTag.querySelectorAll(".temp_" + propName).forEach(e => e.remove());
 
-                    var currentFill = propName == "fill" ? window.getComputedStyle(contentDoc.querySelector(".fill")).fill : window.getComputedStyle(contentDoc.querySelector(".stroke")).stroke;
+                    var currentFill = propName == "fill" ? window.getComputedStyle(svgTag.querySelector(".fill")).fill : window.getComputedStyle(svgTag.querySelector(".stroke")).stroke;
                     if (currentFill.indexOf("url") > -1) {
                         var currentGradId = currentFill.substring(currentFill.indexOf('#') + 1, currentFill.indexOf('")'));
-                        var currentGrad = contentDoc.getElementById(currentGradId);
+                        var currentGrad = document.getElementById(currentGradId);
                         if (currentGrad && currentGrad.tagName === "linearGradient") {
                             var currentStops = currentGrad.querySelectorAll("stop");
                             if (currentStops.length == stops.length) {
@@ -1392,7 +1512,7 @@
                         }
                     }
 
-                    var gradient = contentDoc.createElementNS(svgns, "linearGradient");
+                    var gradient = document.createElementNS(svgns, "linearGradient");
                     for (var i = 0, length = stops.length; i < length; i++) {
                         var stop = document.createElementNS(svgns, "stop");
                         stop.setAttribute("offset", stops[i].offset);
@@ -1415,7 +1535,7 @@
                 function insertRadialGradient(gradientId, styleFill, propName) {
                     var defsTag = svgTag.getElementsByTagName("defs")[0];
                     if (!defsTag) {
-                        defsTag = contentDoc.createElementNS(svgns, "defs");
+                        defsTag = document.createElementNS(svgns, "defs");
                         svgTag.appendChild(defsTag);
                     }
                     var stops = styleFill.stops;
@@ -1448,10 +1568,10 @@
                     //clean up old non-default gradients
                     defsTag.querySelectorAll(".temp_" + propName).forEach(e => e.remove());
 
-                    var currentFill = propName == "fill" ? window.getComputedStyle(contentDoc.querySelector(".fill")).fill : window.getComputedStyle(contentDoc.querySelector(".stroke")).stroke;
+                    var currentFill = propName == "fill" ? window.getComputedStyle(svgTag.querySelector(".fill")).fill : window.getComputedStyle(svgTag.querySelector(".stroke")).stroke;
                     if (currentFill.indexOf("url") > -1) {
                         var currentGradId = currentFill.substring(currentFill.indexOf('#') + 1, currentFill.indexOf('")'));
-                        var currentGrad = contentDoc.getElementById(currentGradId);
+                        var currentGrad = document.getElementById(currentGradId);
                         if (currentGrad && currentGrad.tagName === "radialGradient") {
                             var currentStops = currentGrad.querySelectorAll("stop");
                             if (currentStops.length == stops.length) {
@@ -1470,7 +1590,7 @@
                         }
                     }
 
-                    var gradient = contentDoc.createElementNS(svgns, "radialGradient");
+                    var gradient = document.createElementNS(svgns, "radialGradient");
                     for (var i = 0, length = stops.length; i < length; i++) {
                         var stop = document.createElementNS(svgns, "stop");
                         stop.setAttribute("offset", stops[i].offset);
@@ -1496,67 +1616,35 @@
                 for(var i = 0; i < obj.compoundChildren.length; i++) {
                     var componentId = obj.compoundChildren[i];
                     var childId = $ax.public.fn.getComponentId(id, componentId) + "_img";
-                    const container = document.getElementById(childId);
-                    const contentDoc = container.contentDocument;
-                    if(!contentDoc || contentDoc.URL == "about:blank") container.onload = () => applyStyleOverrides(container.contentDocument, overridedStyle);
-                    else applyStyleOverrides(contentDoc, overridedStyle);
+                    applyStyleOverrides(childId, overridedStyle);
                 }
             } else {
                 const svgContainerId = id + "_img";
                 const container = document.getElementById(svgContainerId);
-                if (!container) return;
-                if($ax.public.fn.IsRadioButton(obj.type) || $ax.public.fn.IsCheckBox(obj.type)) {
-                    let imageKey = event + "~";
-                    const viewStr = parent.document.querySelector(".currentAdaptiveView").getAttribute("val");
-                    if(viewStr && viewStr !== "default") imageKey += viewStr;
-                    const data = obj.images[imageKey];
-                    if (data && container.data && !container.data.includes(data)) container.data = data;
-                }
-                const contentDoc = container.contentDocument;
-                if(!contentDoc || contentDoc.URL == "about:blank") container.onload = () => applyStyleOverrides(container.contentDocument, overridedStyle);
-                else applyStyleOverrides(contentDoc, overridedStyle);
+                if (!container || container.tagName.toLowerCase() != "svg") return;
+                applyStyleOverrides(svgContainerId, overridedStyle);
             }
         }
-        //else {
-
-        //    function resetOverrides(svgContainerId) {
-        //        var svgFills = document.getElementById(svgContainerId).contentDocument.querySelectorAll(".fill");
-        //        svgFills.forEach((svgFill) => {
-        //            svgFill.setAttribute("style", "");
-        //        });
-        //        var svgBorders = document.getElementById(svgContainerId).contentDocument.querySelectorAll(".stroke");
-        //        svgBorders.forEach((svgBorder) => {
-        //            svgBorder.setAttribute("style", "");
-        //            svgBorder.setAttribute("stroke-dasharray", "");
-        //        });
-        //    }
-
-        //    var object = $obj(id);
-        //    if(object.generateCompound) {
-        //        for(var i = 0; i < object.compoundChildren.length; i++) {
-        //            var componentId = object.compoundChildren[i];
-        //            var childId = $ax.public.fn.getComponentId(id, componentId) + "_img";
-        //            resetOverrides(childId, overridedStyle);
-        //        }
-        //    } else {
-        //        const svgContainerId = id + "_img";
-        //        resetOverrides(svgContainerId, overridedStyle);
-        //    }
-        //}
     }
 
-    var _applyImageAndTextJson = function (id, event) {
-        _enableStateTransitions();
+    var _applyImageAndTextJson = function (id, event, blockTransition) {
+        var hasNotrs;
+        if(!blockTransition) hasNotrs = _enableStateTransitions(id);
 
         const textId = $ax.GetTextPanelId(id);
         if(textId) _resetTextJson(id, textId);
+
+        var fullStyle = _computeFullStyle(id, event, $ax.adaptive.currentViewId);
+        if (_idToAppliedStyles[id] && _idToAppliedStyles[id].style) {
+            $.extend(fullStyle, _idToAppliedStyles[id].style);
+        }
 
         if($ax.public.fn.IsImageBox($obj(id).type)) {
             const imageUrl = $ax.adaptive.getImageForStateAndView(id, event);
             if(imageUrl) {
                 _applyImage(id, imageUrl, event);
             }
-        } else _applySvg(id, event);
+        } else _applySvg(id, event, fullStyle);
 
         if (textId) {
             const overridedStyle = _computeAllOverrides(id, undefined, event, $ax.adaptive.currentViewId);
@@ -1565,7 +1653,7 @@
             var textElement = document.getElementById(textId);
             if (!$.isEmptyObject(overridedStyle)) {
                 var diagramObject = $ax.getObjectFromElementId(id);
-                var fullStyle = _computeFullStyle(id, event, $ax.adaptive.currentViewId, overridedStyle);
+                //var fullStyle = _computeFullStyle(id, event, $ax.adaptive.currentViewId, overridedStyle);
                 var padding = { top: 0, right: 0, bottom: 0, left: 0 };
                 if (fullStyle.paddingTop) padding.top = +fullStyle.paddingTop;
                 if (fullStyle.paddingBottom) padding.bottom = +fullStyle.paddingBottom;
@@ -1602,6 +1690,10 @@
                 $ax.repeater.applySuffixToElementId(id, '_input')
             ], event, false
         );
+
+        _updateCornersForBorders(id, fullStyle);
+
+        if(!blockTransition && hasNotrs) disableStateTransitionsOnEnd(id, fullStyle.transition);
     };
     
     let _updateStateClasses = function(ids, event, addMouseOverOnMouseDown) {
@@ -2254,34 +2346,49 @@
         }
     }
 
-    $ax.style.resetLayerChildrenStates = function(layerId) {
-        var children = $ax.public.fn.getLayerChildrenDeep(layerId, true);
-        for (var i = 0; i < children.length; i++) {
-            var el = document.getElementById(children[i]);
-            var styleAttr = el.getAttribute("style");
-            el.setAttribute("style", styleAttr + "transition: none;");
-            _applyImageAndTextJson(children[i], $ax.style.generateState(children[i]));
-            el.setAttribute("style", styleAttr);
-        }
-    }
-
     $ax.style.clearAdaptiveStyles = function() {
         for(var shapeId in _adaptiveStyledWidgets) {
             var repeaterId = $ax.getParentRepeaterFromScriptId(shapeId);
             if(repeaterId) continue;
             var elementId = $ax.GetButtonShapeId(shapeId);
-            if(elementId) _applyImageAndTextJson(elementId, $ax.style.generateState(elementId));
+            if(elementId) _applyImageAndTextJson(elementId, $ax.style.generateState(elementId), true);
         }
 
         _adaptiveStyledWidgets = {};
     };
 
-    $ax.style.setAdaptiveStyle = function(shapeId, style) {
+    $ax.style.setAdaptiveStyle = function(shapeId, style, state) {
         _adaptiveStyledWidgets[$ax.repeater.getScriptIdFromElementId(shapeId)] = style;
 
         var textId = $ax.GetTextPanelId(shapeId);
         if(textId) _applyTextStyle(textId, style);
 
+        const svgContainerId = shapeId + "_img";
+        const container = document.getElementById(svgContainerId);
+        if(container && container.tagName.toLowerCase() == "svg") {
+            _applySvg(shapeId, state ?? NORMAL);
+
+            if(style.size) {
+                if($obj(shapeId).friendlyType == "Rectangle") {
+                    $(container).css({ 'width': style.size.width, 'height': style.size.height });
+                } else {
+                    var baseStyle = _computeFullStyle(shapeId, NORMAL, "");
+                    var oldSize = baseStyle.size;
+                    var oldWidth = oldSize.width;
+                    var oldHeight = oldSize.height;
+
+                    container.style.transformOrigin = 'top left';
+                    var oldTransformMatrix = new WebKitCSSMatrix(window.getComputedStyle(container).transform);
+                    var oldScaleX = oldTransformMatrix.m11;
+                    var oldScaleY = oldTransformMatrix.m22;
+                    var scaleX = (style.size.width / oldWidth) * oldScaleX;
+                    var scaleY = (style.size.height / oldHeight) * oldScaleY;
+                    if(oldScaleX !== scaleX || oldScaleY !== scaleY) {
+                        container.style.transform = 'Scale(' + scaleX + ', ' + scaleY + ')';
+                    }
+                }
+            }
+        }
         $ax.placeholderManager.refreshPlaceholder(shapeId);
 
         // removing this for now
@@ -2399,7 +2506,7 @@
         val = Math.floor(val / 256);
         color.r = val % 256;
         val = Math.floor(val / 256);
-        color.a = val % 256;
+        color.a = (val % 256) / 255;
         return _getCssColor(color);
     };
 

@@ -384,25 +384,6 @@ $axure.internal(function($ax) {
         }
     };
 
-    var _displayHackStart = function (element) {
-        var parent = element;
-        var displays = [];
-        while (parent) {
-            if (parent.style.display == 'none') {
-                displays.push(parent);
-                //use block to overwrites default hidden objects' display
-                parent.style.display = 'block';
-            }
-            parent = parent.parentElement;
-        }
-
-        return displays;
-    };
-
-    var _displayHackEnd = function (displayChangedList) {
-        for (var i = 0; i < displayChangedList.length; i++) displayChangedList[i].style.display = 'none';
-    };
-
     var _autoFitIds = $ax.expr.autoFitIds = {};
 
     _setAutoFitId = $ax.expr.setAutoFitId = function (scriptId, css) {
@@ -422,12 +403,76 @@ $axure.internal(function($ax) {
         }
     }
 
+    var _needsDisplay = function (id) {
+        var parent = document.getElementById(id);
+        while (parent) {
+            if (parent.style.display == 'none') return true;
+            parent = parent.parentElement;
+        }
+        return false;
+    };
+
+    var _getMeasureContainer = function () {
+        var $container = $jobj("measure");
+        if ($container.length == 0) {
+            $container = $("<div id='measure' style='position: absolute; width:0px; height:0px'></div>");
+            $("body").append($container);
+        }
+        return $container;
+    };
+
+    var _displayWidgetIfNeeded = function(id) {        
+        var jobj = $jobj(id);
+        var needsDisplay = _needsDisplay(id);
+        if(!needsDisplay) return {
+            jObject: jobj,
+            trap: undefined
+        };
+
+        var $container = _getMeasureContainer();
+        jobj = jobj.clone();
+        $container.append(jobj);
+        
+        return {
+            jObject: jobj,
+            trap: function() {
+                jobj.remove();
+            }
+        };
+    }
+    $ax.expr.displayWidgetIfNeeded = _displayWidgetIfNeeded;
+
+
+    var _displayWidgetAndParents = function(id) {
+        var parents = $ax('#' + id).getParents(true, '*')[0];
+        parents.push(id); // also need to show self
+
+        var displayed = [];
+        for(var i = 0; i < parents.length; i++) {
+            var currId = parents[i];
+            var currObj = $jobj(currId);
+            if(currObj.css('display') == 'none') {
+                currObj.css('display', 'block');
+                displayed.push(currId);
+            }
+        }
+
+        return function() {
+            for(var i = 0; i < displayed.length; i++) {
+                $jobj(displayed[i]).css('display', 'none');
+            }
+        };
+    }
+    $ax.expr.displayWidgetAndParents = _displayWidgetAndParents;
+
     var autofitWidget = function (id) {
 
         var obj = $obj(id);
         if (obj.autoFitHeight || obj.autoFitWidth) {
 
-            var display = _displayHackStart(document.getElementById(id));
+            var values = _displayWidgetIfNeeded(id);
+            var jobj = values.jObject;
+            var trap = values.trap;
 
             var query = $ax('#' + id);
             var size = query.size();
@@ -440,7 +485,8 @@ $axure.internal(function($ax) {
             var style = $ax.style.computeFullStyle(id, $ax.style.generateState(id), $ax.adaptive.currentViewId);
 
             if (obj.autoFitHeight) {
-                var newHeight = $('#' + textId).height();
+                var jText = jobj.children('#' + textId);
+                var newHeight = jText.height();
                 if (style.paddingTop) newHeight += Number(style.paddingTop);
                 if (style.paddingBottom) newHeight += Number(style.paddingBottom);
 
@@ -450,7 +496,7 @@ $axure.internal(function($ax) {
             };
 
             if (obj.autoFitWidth) {
-                var pars = $jobj(id).find('p');
+                var pars = jobj.find('p');
                 var newWidth = 0;
 
                 for (var j = 0; j < pars.length; ++j) {
@@ -498,7 +544,7 @@ $axure.internal(function($ax) {
                 }
             }
 
-            _displayHackEnd(display);
+            if(trap) trap();
 
             _setAutoFitId(id, css);
         }

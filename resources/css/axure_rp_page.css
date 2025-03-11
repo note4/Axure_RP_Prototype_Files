@@ -324,13 +324,37 @@ div.annnote {
     transition: inherit;
 }
 
-.notransition * {
+.notrs, .notrs * {
     transition: none !important;
+}
+
+.nocrntl {
+    border-top-left-radius : 0px !important;
+}
+
+.nocrntr {
+    border-top-right-radius : 0px !important;
+}
+
+.nocrnbr {
+    border-bottom-right-radius : 0px !important;
+}
+
+.nocrnbl {
+    border-bottom-left-radius : 0px !important;
 }
 
 object.img {
     pointer-events: none;
     user-select: none;
+}
+
+.selected .btn_check {
+    display:inherit;
+}
+
+.btn_check {
+    display: none;
 }
 
 #ios-safari {

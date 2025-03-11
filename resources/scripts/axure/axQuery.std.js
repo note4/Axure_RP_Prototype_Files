@@ -181,7 +181,7 @@ $axure.internal(function($ax) {
                 var newStateName = $ax.visibility.GetPanelStateId(elementId, Number(stateNumber) - 1);
                 var wasVisible = $ax.visibility.IsIdVisible(elementId);
 
-                $ax.dynamicPanelManager.setPanelSizeChange(elementId, $ax.dynamicPanelManager.getPanelStateSizeDelta(currentStateName, newStateName));
+                $ax.dynamicPanelManager.setPanelSizeChange(elementId, currentStateName, newStateName);
 
 
                 var delta = NaN;
@@ -703,7 +703,7 @@ $axure.internal(function($ax) {
                 });
             }
 
-            var svgChildren = query.children('object.img');
+            var svgChildren = query.children('svg.img');
             if(svgChildren && svgChildren.length !== 0) {
                 var childAnimationArray = [];
                 svgChildren.each(function (i, child) {
@@ -741,7 +741,8 @@ $axure.internal(function($ax) {
                         } else if(animationObj.scaleX !== undefined) {
                             animationObj.obj.style.transform = 'Scale(' + animationObj.scaleX + ', ' + animationObj.scaleY + ')';
                         } else {
-                            $(animationObj.obj).animate(animationObj.sizingCss, { queue: false, duration: 0 });
+                            $(animationObj.obj).css(animationObj.sizingCss);
+                            // $(animationObj.obj).animate(animationObj.sizingCss, { queue: false, duration: 0 });
                         }
                     });
                 }
@@ -753,7 +754,9 @@ $axure.internal(function($ax) {
                 //        step: textStepFunction
                 //    });
                 //}
-                query.animate(newLocationAndSizeCss, { queue: false, duration: 0, complete: onComplete });
+                query.css(newLocationAndSizeCss);
+                onComplete();
+                // query.animate(newLocationAndSizeCss, { queue: false, duration: 0, complete: onComplete });
             } else {
                 if(childAnimationArray) {
                     $(childAnimationArray).each(function (i, animationObj) {
@@ -1405,8 +1408,34 @@ $axure.internal(function($ax) {
         return { valid: true, top: newTop, left: axObj.isPercentWidthPanel ? 0 : newLeft };
     };
 
-    //relative to the parent
-    $ax.public.fn.offsetBoundingRect = function (ignoreRotation, ignoreOuterShadow) {
+    //relative to the parent component
+    $ax.public.fn.offsetBoundingRectToComponent = function() {
+        var offsetBoundingRect = this.offsetBoundingRect();
+
+        var parentComponentLoc = {top: 0, left: 0};
+        var parents = this.getParents(true, '*')[0];
+        for(var i = 0; i < parents.length; i++) {
+            var parentId = parents[i];
+            var type = $ax.getTypeFromElementId(parentId);
+            if ($axure.fn.IsReferenceDiagramObject(type)) {
+                parentComponentLoc = $ax('#' + parentId).offsetLocation();
+                break;
+            } else if (!$axure.fn.IsLayer(type)) break;
+        }
+
+        var boundingRect = {
+            left: offsetBoundingRect.left - parentComponentLoc.left,
+            top: offsetBoundingRect.top - parentComponentLoc.top,
+            width: offsetBoundingRect.width,
+            height: offsetBoundingRect.height,
+            isFixed: offsetBoundingRect.isFixed
+        };
+
+        return _populateBoundingRect(boundingRect);
+    }
+
+    //relative to the parent state or page
+    $ax.public.fn.offsetBoundingRect = function (ignoreRotation, ignoreOuterShadow, ignorePosition) {
         var elementId = this.getElementIds()[0];
         if (!elementId) return undefined;
         
@@ -1416,52 +1445,69 @@ $axure.internal(function($ax) {
         var position, size, rotation;
 
         var trap;
+        var displayObj;
         var state;
         var style;
         var movedLoc = $ax.visibility.getMovedLocation(elementId);
         var resizedSize = $ax.visibility.getResizedSize(elementId);
         
-        if (movedLoc) {
-            position = movedLoc;
-        } else if(element && element.getAttribute('data-left')) {
-            position = {
-                left: Number(element.getAttribute('data-left')),
-                top: Number(element.getAttribute('data-top'))
-            };
-        } else if($obj(elementId)) {
-            state = $ax.style.generateState(elementId);
-            style = $ax.style.computeFullStyle(elementId, state, $ax.adaptive.currentViewId);
-            position = { left: style.location.x, top: style.location.y };
-
-            var oShadow = style.outerShadow;
-
-            if (oShadow.on && !ignoreOuterShadow) {
-                if (oShadow.offsetX < 0) {
-                    position.left += oShadow.offsetX;
-                    position.left -= oShadow.blurRadius;
-                }
-                if (oShadow.offsetY < 0) {
-                    position.top += oShadow.offsetY;
-                    position.top -= oShadow.blurRadius;
+        var initTrapIfNeeded = function() {
+            if(!trap) {
+                var trimmedId = $ax.repeater.removeSuffixFromElementId(elementId);
+                if(ignorePosition) {
+                    var values = $ax.expr.displayWidgetIfNeeded(trimmedId);
+                    displayObj = trimmedId == elementId ? values.jObject : values.jObject.find('#' + elementId);
+                    trap = values.trap;
+                } else {
+                    displayObj = $(element);
+                    trap = $ax.expr.displayWidgetAndParents(trimmedId);
                 }
             }
-
-            var parents = this.getParents(true, '*')[0];
-            for(var i = 0; i < parents.length; i++) {
-                var parentId = parents[i];
-                var type = $ax.getTypeFromElementId(parentId);
-                if ($axure.fn.IsReferenceDiagramObject(type)) {
-                    var rdoLoc = $ax('#' + parentId).offsetLocation();
-                    position.left += rdoLoc.x;
-                    position.top += rdoLoc.y;
-                    break;
-                } else if (!$axure.fn.IsLayer(type)) break;
-            }
-        } else {
-            if (!trap) trap = _displayWidget($ax.repeater.removeSuffixFromElementId(elementId));
-            var jObjPosition = $(element).position();
-            position = { left: jObjPosition.left, top: jObjPosition.top };
         }
+
+        if (!ignorePosition) {
+            if (movedLoc) {
+                position = movedLoc;
+            } else if(element && element.getAttribute('data-left')) {
+                position = {
+                    left: Number(element.getAttribute('data-left')),
+                    top: Number(element.getAttribute('data-top'))
+                };
+            } else if($obj(elementId)) {
+                state = $ax.style.generateState(elementId);
+                style = $ax.style.computeFullStyle(elementId, state, $ax.adaptive.currentViewId);
+                position = { left: style.location.x, top: style.location.y };
+
+                var oShadow = style.outerShadow;
+
+                if (oShadow.on && !ignoreOuterShadow) {
+                    if (oShadow.offsetX < 0) {
+                        position.left += oShadow.offsetX;
+                        position.left -= oShadow.blurRadius;
+                    }
+                    if (oShadow.offsetY < 0) {
+                        position.top += oShadow.offsetY;
+                        position.top -= oShadow.blurRadius;
+                    }
+                }
+
+                var parents = this.getParents(true, '*')[0];
+                for(var i = 0; i < parents.length; i++) {
+                    var parentId = parents[i];
+                    var type = $ax.getTypeFromElementId(parentId);
+                    if ($axure.fn.IsReferenceDiagramObject(type)) {
+                        var rdoLoc = $ax('#' + parentId).offsetLocation();
+                        position.left += rdoLoc.x;
+                        position.top += rdoLoc.y;
+                        break;
+                    } else if (!$axure.fn.IsLayer(type)) break;
+                }
+            } else {
+                initTrapIfNeeded();
+                var jObjPosition = displayObj.position();
+                position = { left: jObjPosition.left, top: jObjPosition.top };
+            }
+        } else position = { left: 0, top: 0 };
 
         if (resizedSize) {
             size = resizedSize;
@@ -1487,9 +1533,8 @@ $axure.internal(function($ax) {
                 size.height += oShadow.blurRadius;
             }
         } else {
-            if(!trap) trap = _displayWidget($ax.repeater.removeSuffixFromElementId(elementId));
-            var jObj = $(element);
-            size = { width: jObj.outerWidth(), height: jObj.outerHeight() };
+            initTrapIfNeeded();
+            size = { width: displayObj.outerWidth(), height: displayObj.outerHeight() };
         }
         
         var fixed = _fixedLocation(elementId, size);
@@ -1517,8 +1562,8 @@ $axure.internal(function($ax) {
                 style = style || $ax.style.computeFullStyle(elementId, state, $ax.adaptive.currentViewId);
                 rotation = style.rotation;
             } else {
-                if (!trap) trap = _displayWidget($ax.repeater.removeSuffixFromElementId(elementId));
-                rotation = $ax.move.getRotationDegreeFromElement(element);
+                initTrapIfNeeded();
+                rotation = $ax.move.getRotationDegreeFromElement(displayObj[0]);
             }
             if(rotation && rotation != 0)
                 boundingRect = $ax.public.fn.getBoundingRectForRotate(_populateBoundingRect(boundingRect), rotation);
@@ -1581,17 +1626,17 @@ $axure.internal(function($ax) {
     }
 
     $ax.public.fn.size = function ({ ignoreRotation = true, ignoreOuterShadow = true } = {}) {
-        var boundingRect = this.offsetBoundingRect(ignoreRotation, ignoreOuterShadow);
+        var boundingRect = this.offsetBoundingRect(ignoreRotation, ignoreOuterShadow, true);
         return boundingRect ? boundingRect.size : undefined;
     };
 
     $ax.public.fn.width = function () {
-        var boundingRect = this.offsetBoundingRect(true);
+        var boundingRect = this.offsetBoundingRect(true, false, true);
         return boundingRect ? boundingRect.width : undefined;
     };
 
     $ax.public.fn.height = function () {
-        var boundingRect = this.offsetBoundingRect(true);
+        var boundingRect = this.offsetBoundingRect(true, false, true);
         return boundingRect ? boundingRect.height : undefined;
     };
 
@@ -1621,25 +1666,4 @@ $axure.internal(function($ax) {
     $ax.public.fn.top = function(relative) {
         return relative ? this.offsetLocation().top : this.viewportLocation().top;
     };
-
-    var _displayWidget = function(id) {
-        var parents = $ax('#' + id).getParents(true, '*')[0];
-        parents.push(id); // also need to show self
-
-        var displayed = [];
-        for(var i = 0; i < parents.length; i++) {
-            var currId = parents[i];
-            var currObj = $jobj(currId);
-            if(currObj.css('display') == 'none') {
-                currObj.css('display', 'block');
-                displayed.push(currId);
-            }
-        }
-
-        return function() {
-            for(var i = 0; i < displayed.length; i++) {
-                $jobj(displayed[i]).css('display', 'none');
-            }
-        };
-    }
 });
