@@ -158,7 +158,8 @@ ul.sitemapTree {
 }
 
 .sitemapHeader {
-    padding: 20px 0 0 7px;
+    /*zy ad 边栏标题上线间距*/
+    padding: 5px 0;
 }
 
 .mobileMode .sitemapHeader {
@@ -182,7 +183,21 @@ ul.sitemapTree {
     font-size: 14px;
     text-align: end;
     user-select: none;
+    /*zy add*/
+    width: auto;
     cursor: pointer;
+    text-align: center;
+    font-size: 12px;
+    line-height: 28px;
+    padding: 0 6px;
+    border-radius: 6px;
+    background: #08d5aa;
+    color: #fff;
+}
+
+#expandCollapseAll:hover {
+    /*zy add*/
+    background: #00becc;
 }
 
 #expandCollapseAll:hover {
