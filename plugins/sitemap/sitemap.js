@@ -306,7 +306,7 @@ var openPreviousPage = $axure.player.openPreviousPage = function () {
     function setExpandCollapseState(collapsedAll) {
         if (collapsedAll == _collapsedAll) return;
         _collapsedAll = collapsedAll;
-        $("#expandCollapseAll").text(_collapsedAll ? "展开全部" : "闭合全部");
+        $("#expandCollapseAll").text(_collapsedAll ? "展开" : "折叠");
     }
 
     function expandCollapseAll_click(e) {
